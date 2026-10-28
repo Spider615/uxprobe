@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+// uxprobe run [项目目录] [--config 配置文件] [--page /a --page /b] [--json]
+import { resolve } from "node:path";
+import { loadConfig } from "../src/config.mjs";
+import { run } from "../src/run.mjs";
+
+const args = process.argv.slice(2);
+const cmd = args[0] && !args[0].startsWith("-") ? args.shift() : "run";
+const dir = resolve(args[0] && !args[0].startsWith("-") ? args.shift() : ".");
+const only = []; let json = false; let configFile;
+for (let i = 0; i < args.length; i++) { if (args[i] === "--page") only.push(args[++i]); if (args[i] === "--json") json = true; if (args[i] === "--config") configFile = args[++i]; }
+
+if (cmd !== "run") { console.error(`未知命令 ${cmd}。用法：uxprobe run [项目目录] [--config 文件] [--page /path] [--json]`); process.exit(2); }
+try {
+  const config = loadConfig(dir, configFile);
+  const { report, outDir } = await run(config, { only: only.length ? only : undefined, log: json ? () => {} : console.log });
+  if (json) console.log(JSON.stringify(report));
+  else {
+    console.log(`\n${report.issues.length} 个问题，用时 ${report.seconds}s。${report.isolation}`);
+    for (const i of report.issues) console.log(`- [${i.cat}] ${i.rule}  ${i.msg}  (${i.pages.length} 页: ${i.pages.slice(0, 3).join(", ")}${i.pages.length > 3 ? "…" : ""})`);
+    console.log(`\n报告：${outDir}/index.html`);
+  }
+  process.exit(report.issues.length ? 1 : 0);
+} catch (e) {
+  console.error(e.code === "ISOLATION" ? `\n隔离校验失败：${e.message}` : `\n运行失败：${e.message}`);
+  process.exit(e.code === "ISOLATION" ? 3 : 2);
+}

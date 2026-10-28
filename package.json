@@ -1,0 +1,17 @@
+{
+  "name": "uxprobe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Find UX-level bugs in vibe-coded web apps with deterministic browser checks",
+  "type": "module",
+  "bin": { "uxprobe": "bin/uxprobe.mjs" },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "minefield": "node test/minefield/server.mjs",
+    "score": "node test/score.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "playwright": "1.60.0"
+  }
+}

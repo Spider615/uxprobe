@@ -1,0 +1,7 @@
+{
+  "start": "node server.mjs",
+  "url": "http://127.0.0.1:{port.web}",
+  "env": { "PORT": "{port.web}", "DATA_DIR": "{data.db}" },
+  "data": { "db": "data" },
+  "pages": ["/"]
+}

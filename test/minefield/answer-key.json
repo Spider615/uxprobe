@@ -1,0 +1,82 @@
+{
+  "/m/overflow": [
+    "horizontal-overflow"
+  ],
+  "/m/truncated": [
+    "truncated"
+  ],
+  "/m/image": [
+    "broken-image",
+    "http-error"
+  ],
+  "/m/raw": [
+    "raw-value"
+  ],
+  "/m/longtext": [
+    "long-text-overflow",
+    "horizontal-overflow"
+  ],
+  "/m/small": [
+    "small-target"
+  ],
+  "/m/occluded": [
+    "occluded"
+  ],
+  "/m/enter": [
+    "enter-no-submit"
+  ],
+  "/m/hover": [
+    "hover-only"
+  ],
+  "/m/clickdiv": [
+    "not-a-button"
+  ],
+  "/m/nofeedback": [
+    "no-feedback"
+  ],
+  "/m/throw": [
+    "uncaught"
+  ],
+  "/m/error-empty": [
+    "error-as-empty"
+  ],
+  "/m/loading-empty": [
+    "loading-as-empty"
+  ],
+  "/m/silent-write": [
+    "write-no-feedback",
+    "no-feedback"
+  ],
+  "/m/double": [
+    "double-submit"
+  ],
+  "/m/console": [
+    "http-error",
+    "console-error"
+  ],
+  "/m/stuck-loading": [
+    "error-stuck-loading"
+  ],
+  "/m/stale": [
+    "stale-after-write"
+  ],
+  "/m/lost": [
+    "lost-after-reload"
+  ],
+  "/m/race": [
+    "race"
+  ],
+  "/m/no-empty": [
+    "no-empty-state"
+  ],
+  "/m/retry": [
+    "retry-on-404"
+  ],
+  "/m/null": [
+    "null-crash",
+    "null-shown"
+  ],
+  "/m/item/1": [
+    "dead-end"
+  ]
+}

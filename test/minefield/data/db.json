@@ -1,0 +1,11 @@
+{
+  "nextId": 100,
+  "items": [
+    { "id": 1, "title": "国庆金饰焕新季·满两千减三百叠加以旧换新", "note": "全国门店", "owner": "王敏", "tags": ["国庆", "满减"] },
+    { "id": 2, "title": "中秋团圆礼", "note": "华南区", "owner": "李磊", "tags": ["中秋"] },
+    { "id": 3, "title": "七夕对戒节", "note": "线上", "owner": "陈晨", "tags": ["七夕", "对戒"] }
+  ],
+  "feedback": [],
+  "orders": [],
+  "profile": { "signature": "原签名" }
+}
