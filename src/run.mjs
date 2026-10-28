@@ -1,6 +1,6 @@
 // 一次完整运行：建沙箱 → 启动应用 → 登录 → 发现页面 → 逐页检查 → 去重 → 出报告 → 核对原数据。
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { launch, newContext, settle, watch, VIEWPORTS } from "./browser.mjs";
 import { Sandbox } from "./sandbox.mjs";
 import { discover, template } from "./discover.mjs";
@@ -75,7 +75,7 @@ export async function run(config, { only, log = console.log, headless = true } =
     await browser?.close().catch(() => {});
     await sandbox.dispose(failed);
   }
-  const report = { app: sandbox.url, seconds: Math.round((Date.now() - started) / 1000), isolation: "原数据在运行前后一致", issues: group(findings) };
+  const report = { project: basename(config.projectDir), finishedAt: new Date().toISOString(), app: sandbox.url, seconds: Math.round((Date.now() - started) / 1000), isolation: "原数据在运行前后一致", issues: group(findings) };
   writeFileSync(join(outDir, "report.json"), JSON.stringify(report, null, 2));
   writeHtml(report, join(outDir, "index.html"));
   return { report, outDir };

@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 // uxprobe run [项目目录] [--config 配置文件] [--page /a --page /b] [--json]
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig } from "../src/config.mjs";
 import { run } from "../src/run.mjs";
 
 const args = process.argv.slice(2);
+if (args[0] === "--version" || args[0] === "-v") {
+  const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  console.log(`uxprobe ${version}（Node ${process.versions.node}）`); process.exit(0);
+}
+if (args[0] === "--node-path") { console.log(process.execPath); process.exit(0); }
+if (args[0] === "--root") { console.log(new URL("..", import.meta.url).pathname.replace(/\/$/, "")); process.exit(0); }
 const cmd = args[0] && !args[0].startsWith("-") ? args.shift() : "run";
 const dir = resolve(args[0] && !args[0].startsWith("-") ? args.shift() : ".");
 const only = []; let json = false; let configFile;

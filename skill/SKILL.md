@@ -1,22 +1,30 @@
 ---
 name: uxprobe
-description: 找 web 项目页面交互体验层面的 bug（UX bug）：点了没反应、没有 loading、加载失败显示成没数据、写入后页面不刷新、刷新后数据丢失、重复提交、竞态、空状态缺失、手机上横向溢出、按钮被遮挡或太小、文字截断等。用户说「测一下页面体验 / 交互有没有 bug / 跑一下 uxprobe / UX 测试 / 体验走查」，或者 vibe coding 改完前端页面、想确认没把交互改坏时使用。只适用于能在本机启动的 web 项目。
+description: 检查 web 项目页面交互、体验层面有没有 bug（UX bug、交互逻辑问题）：点了没反应、没有 loading、加载失败显示成没数据、写入后页面不刷新、刷新后数据丢失、重复提交、竞态、空状态缺失、手机上横向溢出、按钮被遮挡或太小、文字截断等。用户说「检查 / 测一下这个项目的 UX、交互、页面体验有没有 bug / 有没有问题」「体验走查」「跑一下 uxprobe」，或 vibe coding 改完前端页面、想确认没把交互改坏时使用。只要任务是在浏览器里点页面找问题，都先用这个 skill，不要自己开浏览器。只适用于能在本机启动的 web 项目。
 ---
 
 # uxprobe：自动找页面交互体验 bug
 
-工具在 `~/Desktop/workspace/uxprobe`。它把被测应用连同数据复制进沙箱，在副本上启动，用浏览器逐页检查。原数据从头到尾不被打开。
+`uxprobe` 是装在 `~/.local/bin` 的命令，自己会找 Node 22，不用 `nvm use`。工具源码目录用 `uxprobe --root` 查，下文的 `<root>` 指它。
+
+## 铁律：不要在用户的真实应用上直接点
+
+**不准**用 Playwright MCP、`browser_*` 工具或自己写的浏览器脚本，去打开用户正在跑的服务、或者自己 `npm run dev` 起来的服务，然后点按钮、提交表单、发问题。这些服务连的是用户的真实数据，点一下就会写库、调模型、花钱。用户的硬约束是本地数据不能动。
+
+必须走 `uxprobe`：它把应用连同数据复制进沙箱，在副本上启动、在副本上点，原数据从头到尾不被打开，跑前跑后还会核对。
+
+- 配置写不出来（不知道数据在哪、起不来），就停下来问用户，不要退回去直接开浏览器。
+- 只想「看一眼页面长什么样」也走 `uxprobe run --page /某页`，报告里有截图。
 
 ```bash
-cd ~/Desktop/workspace/uxprobe && source ~/.nvm/nvm.sh >/dev/null && nvm use 22 >/dev/null   # 工具本身要 Node 22+
-node bin/uxprobe.mjs run <项目目录> [--page /某页 ...]
+uxprobe run <项目目录> [--page /某页 ...]
 ```
 
 退出码：0 没问题，1 有问题，2 运行失败（应用起不来等），3 **隔离失效**。
 
 ## 第一次测一个项目：先写配置
 
-配置放在 `~/.uxprobe/configs/<项目目录名>.json`，不往用户项目里加文件。所有字段的说明在 `src/config.mjs` 开头，读一遍再写。完整例子在 `examples/ctf-campaign-agent.json`。
+配置放在 `~/.uxprobe/configs/<项目目录名>.json`，不往用户项目里加文件。已经有就直接跑。所有字段的说明在 `<root>/src/config.mjs` 开头，读一遍再写；最小例子是 `<root>/test/minefield/uxprobe.config.json`，`~/.uxprobe/configs/` 下已有的配置也可以参考。
 
 ### 1. 选沙箱方式
 
@@ -57,19 +65,19 @@ node bin/uxprobe.mjs run <项目目录> [--page /某页 ...]
 - 登录：配 `login.path` 和 `login.fill`，密码用 `{envfile.X}` 从项目的 env 文件里读，不要写进配置。扫码和 OAuth 登录不支持。如果有开关能关掉登录门禁，就在 `env` 里关掉；没有开关，就告诉用户这些页面测不了。
 - `pages` 是起始页，工具会从这些页沿站内链接自动发现其他页面。导航靠按钮或菜单、没有 `<a>` 的页面，要手动列进来。动态路由（`/x/[id]`）要从数据副本里取一个真实 id 拼出来，比如用 sqlite3 查一行。
 
-## 看结果、修 bug
+## 看结果：只检查，不修
 
-跑完会打印 `report.json` 的路径。读这个文件，按 `cat` 字段分类处理：
+**只做检查，不要自己改用户项目的代码去修 bug**，用户没明确说「修」就不动。
 
-| 类型 | 怎么处理 |
+跑完会打印 `report.json` 的路径。读它，按 `cat` 和消息里有没有「疑似」整理给用户：
+
+| 类型 | 怎么报 |
 |---|---|
-| 反馈 / 状态 / 流程（error-as-empty、loading-as-empty、no-feedback、write-no-feedback、stale-after-write、lost-after-reload、double-submit、race、no-empty-state、retry-on-404、dead-end…） | 确定的 bug，直接修 |
-| 呈现 / 操作（horizontal-overflow、small-target、occluded、truncated…） | 确定的 bug，但先看 `shot` 字段对应的截图，确认不是设计上故意的 |
-| 消息里带「疑似」的（null-crash 等） | 列给用户，由用户判断。比如后端保证字段不为空时，null-crash 可以忽略 |
+| 反馈 / 状态 / 流程（error-as-empty、loading-as-empty、no-feedback、write-no-feedback、stale-after-write、lost-after-reload、double-submit、race、no-empty-state、retry-on-404、dead-end…） | 确定的 bug。每条说清楚用户会看到什么、在哪一页，能从代码里定位就附上文件和行号（只读，不改） |
+| 呈现 / 操作（horizontal-overflow、small-target、occluded、truncated…） | 先看 `shot` 字段的截图，确认不是设计上故意的，再报 |
+| 消息里带「疑似」的（null-crash 等） | 单独列，说明要用户判断什么。比如后端保证字段不为空时 null-crash 可以忽略 |
 
-修完用 `--page <出问题的页面>` 只重跑这些页，确认问题消失后再汇报。不要只改代码不重跑。
-
-汇报时给用户：按类型分组的问题，每条用一句话说清楚用户会看到什么；改了哪些文件；重跑的结果；HTML 报告的路径（`~/.uxprobe/<项目>-<哈希>/report/index.html`，带截图，问题元素用红框标出）。
+最后给 HTML 报告路径（`~/.uxprobe/<项目>-<哈希>/report/index.html`，带截图，问题元素红框标出），问用户要不要修、修哪几条。用户说修了，改完用 `--page <出问题的页面>` 重跑确认问题消失再汇报。
 
 ## 退出码 3：隔离失效
 

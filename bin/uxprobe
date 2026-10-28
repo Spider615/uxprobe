@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# uxprobe 命令入口：装在 ~/.local/bin/uxprobe（软链到这里）。
+# 工具要 Node 22+，而很多项目默认是 Node 18，所以这里自己找一个够新的 node，不依赖当前终端 nvm use 了哪个版本。
+# 被测应用用什么版本由配置里的 start 命令决定，和这里无关。
+set -euo pipefail
+
+# 顺着软链找到真实位置（~/.local/bin/uxprobe → 仓库/bin/uxprobe），macOS 自带的 readlink 没有 -f
+SELF="${BASH_SOURCE[0]}"
+while [ -L "${SELF}" ]; do
+  dir="$(cd "$(dirname "${SELF}")" && pwd -P)"; SELF="$(readlink "${SELF}")"
+  case "${SELF}" in /*) ;; *) SELF="${dir}/${SELF}" ;; esac
+done
+ROOT="$(cd "$(dirname "${SELF}")/.." && pwd -P)"
+
+major() { "$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
+NODE=""
+if command -v node >/dev/null 2>&1 && [ "$(major node)" -ge 22 ]; then NODE="$(command -v node)"; fi
+if [ -z "${NODE}" ]; then
+  for n in $(ls -d "${NVM_DIR:-${HOME}/.nvm}"/versions/node/v*/bin/node 2>/dev/null | sort -rV) /opt/homebrew/bin/node /usr/local/bin/node; do
+    if [ -x "${n}" ] && [ "$(major "${n}")" -ge 22 ]; then NODE="${n}"; break; fi
+  done
+fi
+if [ -z "${NODE}" ]; then
+  echo "uxprobe 需要 Node.js 22 或更高，没找到。装一个：nvm install 22" >&2
+  exit 2
+fi
+exec "${NODE}" "${ROOT}/bin/uxprobe.mjs" "$@"
