@@ -1,0 +1,94 @@
+---
+name: uxprobe
+description: 找 web 项目页面交互体验层面的 bug（UX bug）：点了没反应、没有 loading、加载失败显示成没数据、写入后页面不刷新、刷新后数据丢失、重复提交、竞态、空状态缺失、手机上横向溢出、按钮被遮挡或太小、文字截断等。用户说「测一下页面体验 / 交互有没有 bug / 跑一下 uxprobe / UX 测试 / 体验走查」，或者 vibe coding 改完前端页面、想确认没把交互改坏时使用。只适用于能在本机启动的 web 项目。
+---
+
+# uxprobe：自动找页面交互体验 bug
+
+工具在 `~/Desktop/workspace/uxprobe`。它把被测应用连同数据复制进沙箱，在副本上启动，用浏览器逐页检查。原数据从头到尾不被打开。
+
+```bash
+cd ~/Desktop/workspace/uxprobe && source ~/.nvm/nvm.sh >/dev/null && nvm use 22 >/dev/null   # 工具本身要 Node 22+
+node bin/uxprobe.mjs run <项目目录> [--page /某页 ...]
+```
+
+退出码：0 没问题，1 有问题，2 运行失败（应用起不来等），3 **隔离失效**。
+
+## 第一次测一个项目：先写配置
+
+配置放在 `~/.uxprobe/configs/<项目目录名>.json`，不往用户项目里加文件。所有字段的说明在 `src/config.mjs` 开头，读一遍再写。完整例子在 `examples/ctf-campaign-agent.json`。
+
+### 1. 选沙箱方式
+
+- 数据在仓库目录里（`data/`、`prisma/dev.db`、`.wrangler/state`），或者应用从 `.env` 文件读配置 → `"copyProject": true`。整个仓库（包括 `node_modules`、`.env*`、被 gitignore 的文件，只排除 `.git`）会复制进沙箱再启动。数据跟着工作目录走的话，不用再设路径。APFS 下复制几乎不占空间。
+- 数据在仓库外（`~/Library/Application Support/xxx`、`~/.xxx`）→ 每个目录列进 `data`，再用 `env` 把应用指到副本 `{data.名字}`。
+- 仓库内的数据目录也可以列进 `data`。这样每次写操作后，工具会把它重置回初始状态，让下一个用例看到干净的数据。只要应用会写这个目录，就应该列进去。
+
+### 2. 查清应用会写的每一个地方
+
+搜 `process.env.*`、`homedir()`、`os.tmpdir()`、`Application Support`、`writeFile`、`mkdir`、数据库连接串，逐条列出来，并标出出处的文件和行号。
+
+- `os.tmpdir()` 和 `/tmp` 已在白名单里，写那里不会触发退出码 3，不用处理。
+- 应用拉起的子进程也在监控范围内。soffice、各类 CLI 往家目录写配置，同样会触发退出码 3。能用 env 把它指到不存在的路径就这么做，同时把触发它的按钮写进 `skipClick`。
+
+### 3. 数据库是 MySQL / Postgres 等服务
+
+工具复制不了服务，按应用对它做什么来分：
+
+- 应用只读（查代码确认只有 SELECT 或 READ ONLY 事务）→ 不列进 `data`，加一条 `guards`，跑前跑后各执行一次做比对。MySQL 用 `show master status`。
+- 应用会写 → 设 `"readOnly": true`，只看页面、不点按钮，并告诉用户：要测写操作，需要给应用准备一个专门测试用的库。**不要把应用指向用户的真实库去点按钮。**
+
+### 4. 外部副作用
+
+调模型、发消息、发短信、支付、搜索、写飞书表格、上传对象存储都算。处理时**key 和服务地址都要换**：key 换成假值，地址指到 `http://127.0.0.1:9`（这个端口永远连不上）。只换 key 的话，请求照样发到真实服务器。再把触发这些操作的按钮写进 `skipClick`。
+
+`skipClick` 是正则，匹配的是按钮的可见文字、aria-label、title 拼起来的字符串，所以只有图标的按钮也能命中。它只作用于按钮，不作用于链接，链接只会被打开、不会被提交。
+
+如果整个页面的主要按钮都背着不可逆的外部操作，直接用 `readOnly`，不要逐个往 `skipClick` 里加。
+
+### 5. 启动命令
+
+- 用**项目自己要的 Node 版本**，不是工具要的 22。依赖里有原生模块（better-sqlite3、sharp、bcrypt）的，版本必须和编译时一致。查法：`strings node_modules/<包>/build/Release/*.node | grep node_register_module_v`，v108 对应 Node 18，v115 对应 20，v127 对应 22。
+- 端口用 `{port.web}` 占位，后端单独占一个端口时用 `{port.api}`，不要写死，因为用户自己可能开着同一个项目。
+- 框架有单实例锁时（vinext 的 `.vinext/dev/lock.json`），在启动命令里先删掉锁文件。
+
+### 6. 登录和页面
+
+- 登录：配 `login.path` 和 `login.fill`，密码用 `{envfile.X}` 从项目的 env 文件里读，不要写进配置。扫码和 OAuth 登录不支持。如果有开关能关掉登录门禁，就在 `env` 里关掉；没有开关，就告诉用户这些页面测不了。
+- `pages` 是起始页，工具会从这些页沿站内链接自动发现其他页面。导航靠按钮或菜单、没有 `<a>` 的页面，要手动列进来。动态路由（`/x/[id]`）要从数据副本里取一个真实 id 拼出来，比如用 sqlite3 查一行。
+
+## 看结果、修 bug
+
+跑完会打印 `report.json` 的路径。读这个文件，按 `cat` 字段分类处理：
+
+| 类型 | 怎么处理 |
+|---|---|
+| 反馈 / 状态 / 流程（error-as-empty、loading-as-empty、no-feedback、write-no-feedback、stale-after-write、lost-after-reload、double-submit、race、no-empty-state、retry-on-404、dead-end…） | 确定的 bug，直接修 |
+| 呈现 / 操作（horizontal-overflow、small-target、occluded、truncated…） | 确定的 bug，但先看 `shot` 字段对应的截图，确认不是设计上故意的 |
+| 消息里带「疑似」的（null-crash 等） | 列给用户，由用户判断。比如后端保证字段不为空时，null-crash 可以忽略 |
+
+修完用 `--page <出问题的页面>` 只重跑这些页，确认问题消失后再汇报。不要只改代码不重跑。
+
+汇报时给用户：按类型分组的问题，每条用一句话说清楚用户会看到什么；改了哪些文件；重跑的结果；HTML 报告的路径（`~/.uxprobe/<项目>-<哈希>/report/index.html`，带截图，问题元素用红框标出）。
+
+## 退出码 3：隔离失效
+
+工具在运行过程中持续监控应用进程树往哪里写，同时对原项目目录和所有 `data` 做跑前跑后的指纹比对。写到沙箱外面就中止。报错里会列出具体路径：
+
+- 是应用的数据 → 补进 `data` 或改成 `copyProject`，再跑。
+- 是子进程的配置或缓存 → 用 env 指走，或者把触发它的按钮写进 `skipClick`。
+
+**不要为了让它跑完而绕过这个检查。** 看到退出码 3，说明原数据可能已经被写了一部分，要告诉用户具体是哪个路径。
+
+## 常见问题
+
+| 现象 | 原因和处理 |
+|---|---|
+| 退出码 2，「应用启动后退出了」 | 看报错里附带的应用输出。常见原因：Node 版本和原生模块对不上、端口参数没传进去、单实例锁 |
+| 退出码 2，「打不开 /xxx」或「应用不再响应」 | 应用中途崩了，报错里有应用最后的输出 |
+| 同时跑两个 uxprobe | 不要。抢 CPU 会让 loading、重复提交、竞态这几条依赖时间的规则误判 |
+| 一页 30 秒左右，10 页约 6 分钟 | 正常。只测改动过的页用 `--page` |
+
+## 测不到的
+
+看不懂（文案、图标含义）、流程设计是否合理、要经过多步向导或拖拽才能到达的状态，这些工具都测不到。报告干净不代表体验好，这几类要另外看截图判断。

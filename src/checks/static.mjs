@@ -52,7 +52,7 @@ function inPage({ mobile, minTarget }) {
     const r = el.getBoundingClientRect();
     // 操作：点击区域太小（行内文字链接除外）
     const inlineLink = el.tagName === "A" && getComputedStyle(el).display === "inline" && (el.parentElement?.innerText.trim().length ?? 0) > el.innerText.trim().length + 4;
-    if (!inlineLink && !["checkbox", "radio"].includes(el.type) && (r.width < minTarget || r.height < minTarget) && (mobile || crowded(el, r))) add("small-target", "操作", `「${label(el)}」点击区域 ${Math.round(r.width)}×${Math.round(r.height)}px，小于 ${minTarget}px`, el);
+    if (!inlineLink && !["checkbox", "radio"].includes(el.type) && (r.width < minTarget - 0.5 || r.height < minTarget - 0.5) && (mobile || crowded(el, r))) add("small-target", "操作", `「${label(el)}」点击区域 ${Math.round(r.width)}×${Math.round(r.height)}px，小于 ${minTarget}px`, el);
     // 操作：被别的元素盖住。先滚到可见位置再判断，避免把滚动容器里没露出来的项当成被盖住
     el.scrollIntoView({ block: "center", inline: "nearest" });
     const b2 = shownRect(el); if (!b2) continue;

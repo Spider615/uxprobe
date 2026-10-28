@@ -54,9 +54,10 @@ async function controlLabels(page, skip) {
   const loc = page.locator(CONTROLS); const n = Math.min(await loc.count(), 25); const out = [];
   for (let i = 0; i < n; i++) {
     const el = loc.nth(i);
-    const label = ((await el.getAttribute("aria-label").catch(() => null)) || (await el.innerText().catch(() => "")) || "").trim().replace(/\s+/g, " ").slice(0, 30);
+    const parts = await el.evaluate((e) => [e.innerText, e.getAttribute("aria-label"), e.getAttribute("title")].filter(Boolean).join(" ")).catch(() => "");
+    const label = ((await el.getAttribute("aria-label").catch(() => null)) || (await el.innerText().catch(() => "")) || (await el.getAttribute("title").catch(() => null)) || "").trim().replace(/\s+/g, " ").slice(0, 30);
     const usable = await el.evaluate((e) => !e.disabled && Number(getComputedStyle(e).opacity) > 0.1 && !e.closest("dialog:not([open])")).catch(() => false);
-    if (label && usable && !skip.test(label)) out.push({ index: i, label });
+    if (label && usable && !skip.test(parts)) out.push({ index: i, label });
   }
   return out;
 }

@@ -30,10 +30,11 @@ export async function run(config, { only, log = console.log, headless = true } =
   const outDir = join(config.home, "report");
   rmSync(outDir, { recursive: true, force: true }); mkdirSync(join(outDir, "shots"), { recursive: true });
   const sandbox = new Sandbox(config, log);
-  const started = Date.now(); const findings = []; let browser;
+  const started = Date.now(); const findings = []; let browser; let failed;
   try {
     log("准备沙箱：复制数据、分配端口…"); await sandbox.prepare();
     log("启动应用：" + sandbox.describe()); await sandbox.start();
+    await new Promise((r) => setTimeout(r, 3000)); sandbox.checkLeaks("启动时");
     browser = await launch(headless);
     const auth = await login(browser, sandbox, config, outDir);
     const ctxs = {}; for (const vp of Object.keys(VIEWPORTS)) ctxs[vp] = await newContext(browser, vp, auth);
@@ -48,7 +49,7 @@ export async function run(config, { only, log = console.log, headless = true } =
       return file;
     };
     for (const [i, path] of pages.entries()) {
-      await sandbox.alive();
+      await sandbox.alive(); sandbox.checkLeaks("运行中");
       const url = sandbox.url + path; const t0 = Date.now(); const here = [];
       for (const vp of Object.keys(VIEWPORTS)) {
         const page = await ctxs[vp].newPage(); const l = watch(page);
@@ -64,15 +65,15 @@ export async function run(config, { only, log = console.log, headless = true } =
       }
       for (const f of await conditionChecks(ctxs.desktop, ctxs.mobile, url, shoot)) here.push({ ...f, vp: f.rule === "long-text-overflow" ? "mobile" : "desktop" });
       await sandbox.reset();
-      for (const f of await interactionChecks(ctxs.desktop, url, { skip: config.skipClick, shoot, markDirty: () => (sandbox.dirty = true), reset: () => sandbox.reset() })) here.push({ ...f, vp: "desktop" });
+      if (!config.readOnly) for (const f of await interactionChecks(ctxs.desktop, url, { skip: config.skipClick, shoot, markDirty: () => (sandbox.dirty = true), reset: () => sandbox.reset() })) here.push({ ...f, vp: "desktop" });
       await sandbox.reset();
       for (const f of here) findings.push({ ...f, page: path, template: template(path) });
       log(`[${i + 1}/${pages.length}] ${path}  ${here.length} 条  ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     }
     for (const c of Object.values(ctxs)) await c.close();
-  } finally {
+  } catch (e) { failed = e; throw e; } finally {
     await browser?.close().catch(() => {});
-    await sandbox.dispose();
+    await sandbox.dispose(failed);
   }
   const report = { app: sandbox.url, seconds: Math.round((Date.now() - started) / 1000), isolation: "原数据在运行前后一致", issues: group(findings) };
   writeFileSync(join(outDir, "report.json"), JSON.stringify(report, null, 2));

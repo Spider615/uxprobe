@@ -18,7 +18,7 @@ try {
   else {
     console.log(`\n${report.issues.length} 个问题，用时 ${report.seconds}s。${report.isolation}`);
     for (const i of report.issues) console.log(`- [${i.cat}] ${i.rule}  ${i.msg}  (${i.pages.length} 页: ${i.pages.slice(0, 3).join(", ")}${i.pages.length > 3 ? "…" : ""})`);
-    console.log(`\n报告：${outDir}/index.html`);
+    console.log(`\n报告：${outDir}/index.html\n数据：${outDir}/report.json`);
   }
   process.exit(report.issues.length ? 1 : 0);
 } catch (e) {
