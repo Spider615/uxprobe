@@ -4,8 +4,12 @@ import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const VIEWPORTS = { desktop: { width: 1280, height: 800 }, mobile: { width: 375, height: 760 } };
+export const VIEWPORTS = {
+  desktop: { width: 1280, height: 800 }, mobile: { width: 375, height: 760 },
+  compact: { width: 320, height: 640 }, landscape: { width: 760, height: 375 },
+};
 const LOCAL = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+export const isLocal = (url) => { try { const u = new URL(url); return ["http:", "https:", "ws:", "wss:"].includes(u.protocol) && LOCAL.has(u.hostname); } catch { return false; } };
 
 // Playwright 自带浏览器版本不匹配时，用本机已有的 Chromium
 function findChromium() {
@@ -25,15 +29,54 @@ export async function launch(headless = true) {
   return chromium.launch({ headless, executablePath: findChromium() });
 }
 
-export async function newContext(browser, viewport, storageState) {
-  const ctx = await browser.newContext({ viewport: VIEWPORTS[viewport], ...(viewport === "mobile" ? { isMobile: true, hasTouch: true } : {}), ...(storageState ? { storageState } : {}), acceptDownloads: true });
-  await ctx.route("**/*", (route) => (LOCAL.has(new URL(route.request().url()).hostname) ? route.continue() : route.abort()));
+export async function newContext(browser, viewport, storageState, { readOnly = false } = {}) {
+  if (!VIEWPORTS[viewport]) throw new Error(`未知 viewport：${viewport}`);
+  const ctx = await browser.newContext({ viewport: VIEWPORTS[viewport], ...(viewport !== "desktop" ? { isMobile: true, hasTouch: true } : {}), ...(storageState ? { storageState } : {}), acceptDownloads: true, serviceWorkers: "block" });
+  await ctx.route("**/*", (route) => (isLocal(route.request().url()) && !(readOnly && isWrite(route.request())) ? route.continue() : route.abort()));
+  if (ctx.routeWebSocket) await ctx.routeWebSocket("**/*", (socket) => {
+    if (isLocal(socket.url())) socket.connectToServer(); else socket.close();
+  });
   return ctx;
 }
 
 const isStatic = (url) => /\/@vite\/|\/@fs\/|\/@id\/|\/node_modules\/|\/_next\/static\/|\/__vite|\.(js|mjs|css|map|woff2?|ttf|png|jpe?g|gif|svg|ico|webp)(\?|$)/.test(new URL(url).pathname) || new URL(url).searchParams.has("_rsc");
 export const isApi = (req) => ["fetch", "xhr"].includes(req.resourceType()) && !isStatic(req.url()) && LOCAL.has(new URL(req.url()).hostname);
-export const isWrite = (req) => isApi(req) && req.method() !== "GET" && req.method() !== "HEAD";
+// 按字符识别注释和字符串，避免注释中的引号吞掉后面的 mutation。
+function graphqlSource(text) {
+  const out = []; let i = 0;
+  while (i < text.length) {
+    if (text[i] === "#") { while (i < text.length && !/[\r\n]/.test(text[i])) i++; out.push(" "); continue; }
+    if (text[i] === '"') {
+      const block = text.slice(i, i + 3) === '"""'; i += block ? 3 : 1; let closed = false;
+      while (i < text.length) {
+        if (text[i] === "\\") { i += 2; continue; }
+        if (block ? text.slice(i, i + 3) === '"""' : text[i] === '"') { i += block ? 3 : 1; closed = true; break; }
+        if (!block && /[\r\n]/.test(text[i])) return null;
+        i++;
+      }
+      if (!closed) return null;
+      out.push('""'); continue;
+    }
+    out.push(text[i++]);
+  }
+  return out.join("").trim();
+}
+
+function graphqlRead(req) {
+  if (req.method() !== "POST") return false;
+  try {
+    const body = JSON.parse(req.postData() || "null");
+    const read = (op) => {
+      if (typeof op?.query !== "string") return false;
+      // 混合操作 / 批量操作必须保守归为写；不能仅凭第一个 query 放行后面的 mutation。
+      const source = graphqlSource(op.query);
+      return source !== null && /^(?:query\b|\{)/.test(source) && !/\b(?:mutation|subscription)\b/.test(source);
+    };
+    return Array.isArray(body) ? body.length > 0 && body.every(read) : read(body);
+  } catch { return false; }
+}
+export const isRead = (req) => isApi(req) && !/text\/event-stream/i.test(req.headers?.().accept ?? "") && (["GET", "HEAD"].includes(req.method()) || graphqlRead(req));
+export const isWrite = (req) => isLocal(req.url()) && !["GET", "HEAD", "OPTIONS"].includes(req.method()) && !graphqlRead(req);
 
 // 收集页面上的报错，供各项检查使用
 export function watch(page) {
@@ -42,7 +85,7 @@ export function watch(page) {
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|React DevTools|\[vite\]|\[HMR\]/.test(m.text())) log.errors.push(`console: ${m.text().slice(0, 200)}`); });
   page.on("response", (r) => {
     const req = r.request(); const u = new URL(r.url()); if (!LOCAL.has(u.hostname) || u.pathname === "/favicon.ico") return;
-    if (isApi(req)) log.api.push({ method: req.method(), path: u.pathname, status: r.status() });
+    if (isApi(req)) log.api.push({ method: req.method(), path: u.pathname, url: u.href, read: isRead(req), status: r.status() });
     const asset = ["document", "script", "stylesheet", "image", "font"].includes(req.resourceType());
     if ((asset && r.status() >= 400) || r.status() >= 500) log.http.push(`${req.method()} ${u.pathname} → ${r.status()}`);
   });

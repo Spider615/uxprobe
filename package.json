@@ -10,6 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "minefield": "node test/minefield/server.mjs",
     "score": "node test/score.mjs"
   },

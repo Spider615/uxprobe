@@ -26,8 +26,9 @@ try {
     console.log(`\n${report.issues.length} 个问题，用时 ${report.seconds}s。${report.isolation}`);
     for (const i of report.issues) console.log(`- [${i.cat}] ${i.rule}  ${i.msg}  (${i.pages.length} 页: ${i.pages.slice(0, 3).join(", ")}${i.pages.length > 3 ? "…" : ""})`);
     console.log(`\n报告：${outDir}/index.html\n数据：${outDir}/report.json`);
+    console.log(`覆盖：已完成 ${report.coverage.summary.checked}，跳过 ${report.coverage.summary.skipped}，检查失败 ${report.coverage.summary.error}`);
   }
-  process.exit(report.issues.length ? 1 : 0);
+  process.exit(report.coverage.summary.error ? 2 : report.issues.length ? 1 : 0);
 } catch (e) {
   console.error(e.code === "ISOLATION" ? `\n隔离校验失败：${e.message}` : `\n运行失败：${e.message}`);
   process.exit(e.code === "ISOLATION" ? 3 : 2);

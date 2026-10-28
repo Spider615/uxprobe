@@ -90,13 +90,16 @@ async function hoverOnly(page) {
   return found;
 }
 
-export async function staticChecks(page, viewport, { axe = ["button-name", "link-name", "label", "image-alt"] } = {}) {
-  const mobile = viewport === "mobile";
+export async function staticChecks(page, viewport, { axe } = {}) {
+  const mobile = viewport !== "desktop";
   const list = await page.evaluate(inPage, { mobile, minTarget: mobile ? 32 : 24 }).catch((e) => [{ rule: "probe-error", cat: "工具", msg: String(e.message).slice(0, 120) }]);
   if (mobile) list.push(...(await hoverOnly(page)));
-  if (axe.length) {
-    const res = await new AxeBuilder({ page }).withRules(axe).analyze().catch(() => ({ violations: [] }));
-    for (const v of res.violations) list.push({ rule: `a11y:${v.id}`, cat: "理解", msg: `${v.help}（${v.nodes.length} 处，如 ${v.nodes[0].target.join(" ").slice(0, 50)}）` });
+  if (axe === undefined || axe.length) {
+    try {
+      const builder = new AxeBuilder({ page });
+      const res = await (axe ? builder.withRules(axe) : builder.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])).analyze();
+      for (const v of res.violations) list.push({ rule: `a11y:${v.id}`, cat: "理解", msg: `${v.help}（${v.nodes.length} 处，如 ${v.nodes[0].target.join(" ").slice(0, 50)}）` });
+    } catch (e) { list.push({ rule: "probe-error", cat: "工具", severity: "warning", msg: `可访问性检查未完成：${e.message.split("\n")[0]}` }); }
   }
   return list;
 }

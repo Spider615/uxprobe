@@ -49,10 +49,10 @@ fetch('/api/items').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}
 const mines = {
   // ---- 呈现 ----
   overflow: () => page("活动看板", `<div style="width:${FIXED ? "100%" : "640px"};padding:12px;border:1px solid #e3e8ef">本月活动共 12 场，详细数据见下方表格。</div>`),
-  truncated: () => page("活动列表", `<ul id="list"></ul>`, listScript({ render: `i=>\`<li><span ${FIXED ? 'title="${esc(i.title)}"' : ""} style="display:inline-block;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">\${esc(i.title)}</span></li>\`` })),
+  truncated: () => page("活动列表", `<div id="list"></div>`, listScript({ render: `i=>\`<li><span ${FIXED ? 'title="${esc(i.title)}"' : ""} style="display:inline-block;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom">\${esc(i.title)}</span></li>\`` })),
   image: () => page("品牌", `<img src="${FIXED ? "/logo.svg" : "/missing-logo.png"}" width="80" height="80" alt="品牌 logo"><p>品牌介绍</p>`),
   raw: () => page("活动详情", `<p id="o">加载中…</p>`, `const o=document.getElementById('o');fetch('/api/items').then(r=>{if(!r.ok)throw r.status;return r.json()}).then(d=>{const i=d.items[0];${FIXED ? "o.textContent=i?'负责人：'+(i.owner??'未指定'):'还没有活动'" : "o.textContent='负责人：'+i.ownr"}}).catch(()=>o.textContent='加载失败，请稍后重试')`),
-  longtext: () => page("活动卡片", `<div id="list"></div>`, listScript({ render: `i=>\`<div style="display:flex;gap:8px;padding:6px 0"><b style="${FIXED ? "min-width:0;overflow-wrap:anywhere" : "white-space:nowrap"}">\${esc(i.title)}</b><span class="muted" style="${FIXED ? "min-width:0;overflow-wrap:anywhere" : "white-space:nowrap"}">\${esc(i.note)}</span></div>\`` })),
+  longtext: () => page("活动卡片", `<div id="list"></div>`, listScript({ render: `i=>\`<li style="display:flex;gap:8px;padding:6px 0"><b style="${FIXED ? "min-width:0;overflow-wrap:anywhere" : "white-space:nowrap"}">\${esc(i.title)}</b><span class="muted" style="${FIXED ? "min-width:0;overflow-wrap:anywhere" : "white-space:nowrap"}">\${esc(i.note)}</span></li>\`` })),
   // ---- 操作 ----
   small: () => page("通知", `<p>你有 1 条新通知 <button aria-label="关闭通知" style="${FIXED ? "width:32px;height:32px" : "width:16px;height:16px;padding:0;font-size:10px;line-height:1"}" onclick="this.parentElement.remove()">×</button></p>`),
   occluded: () => page("优惠券", `<div style="position:relative;padding:24px;border:1px solid #e3e8ef"><button onclick="this.textContent='已领取'">领取优惠券</button>
@@ -68,9 +68,9 @@ const mines = {
   throw: () => page("设置", `<p id="s">通知：开</p><button onclick="save()">保存设置</button>`, `function save(){const cfg=${FIXED ? "{notify:true}" : "undefined"};document.getElementById('s').textContent='通知：'+(cfg.notify?'开':'关');toast('已保存')}`),
   "error-empty": () => page("活动", `<div id="list"></div>`, listScript({ empty: "暂无数据", onError: FIXED ? "showError" : "showEmpty" })),
   "loading-empty": () => page("活动", `<div id="list"></div>`, listScript({ loading: FIXED ? "加载中…" : "暂无数据", empty: "暂无数据" })),
-  "silent-write": () => page("意见反馈", `<form id="f"><textarea id="t" aria-label="反馈内容"></textarea><br><button id="b">提交</button></form><p id="m"></p>`,
+  "silent-write": () => page("意见反馈", `<form id="f"><textarea id="t" aria-label="反馈内容"></textarea><br><button id="b">提交</button></form><p id="m" role="status"></p>`,
     `f.onsubmit=e=>{e.preventDefault();${FIXED ? "b.disabled=true;" : ""}fetch('/api/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:t.value})}).then(r=>{${FIXED ? "if(r.ok){m.textContent='已提交，感谢反馈';t.value=''}" : ""}})}`),
-  double: () => page("下单", `<button id="b">创建订单</button><p id="m"></p>`,
+  double: () => page("下单", `<button id="b">创建订单</button><p id="m" role="status"></p>`,
     `b.onclick=async()=>{${FIXED ? "b.disabled=true;" : ""}const r=await fetch('/api/orders',{method:'POST'});const d=await r.json();m.textContent='已创建订单 #'+d.id;${FIXED ? "b.disabled=false;" : ""}}`),
   console: () => page("首页配置", `<p>欢迎回来</p>${FIXED ? "" : `<script src="/vendor/analytics.js"></script>`}`),
   "stuck-loading": () => page("活动", `<div id="list"></div>`, listScript({ onError: FIXED ? "showError" : "()=>{}" })),
