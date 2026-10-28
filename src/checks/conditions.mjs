@@ -58,18 +58,18 @@ export async function conditionChecks(desktop, mobile, url, shoot) {
   const usesData = !sameLines(N.text, E.text);
   const add = async (rule, cat, msg, from) => out.push({ rule, cat, msg, shot: await shoot(from.page, rule) });
 
-  if (usesData && sameLines(F.text, S.text) && !S.busy === !F.busy) await add("error-stuck-loading", "反馈", "接口失败时页面一直停在加载中，没有报错也没有重试入口", F);
+  if (usesData && sameLines(F.text, S.text) && !S.busy === !F.busy && !sameLines(F.text, E.text)) await add("error-stuck-loading", "反馈", "接口失败时页面一直停在加载中，没有报错也没有重试入口", F);
   else if (usesData && sameLines(F.text, E.text)) {
     if (minus(E.text, N.text).some((l) => ERROR_WORD.test(l))) await add("empty-as-error", "反馈", "数据为空时页面显示成了加载失败", E);
     else await add("error-as-empty", "反馈", "接口失败时页面显示成「没有数据」，和真的没有数据一模一样，用户会以为数据丢了", F);
   } else if (usesData && sameLines(F.text, N.text)) await add("silent-error", "反馈", "接口失败时页面没有任何变化和提示", F);
 
-  if (usesData && sameLines(S.text, E.text) && !S.busy && !sameLines(S.text, F.text)) await add("loading-as-empty", "反馈", "加载过程中先显示「没有数据」，等数据回来才变，用户会误以为是空的", S);
+  if (usesData && sameLines(S.text, E.text) && !S.busy) await add("loading-as-empty", "反馈", "加载过程中先显示「没有数据」，等数据回来才变，用户会误以为是空的", S);
   else if (usesData && !S.busy && !sameLines(S.text, N.text) && minus(S.text, N.text).length === 0 && !sameLines(S.text, F.text)) await add("no-loading", "反馈", "接口慢的时候页面没有任何加载提示", S);
 
   if (usesData && minus(E.text, N.text).length === 0) await add("no-empty-state", "流程", "数据为空时页面上没有任何说明或引导，只剩一块空白", E);
 
-  if (U.log.errors.length) await add("null-crash", "反馈", `列表里有字段为空时页面报错：${U.log.errors[0]}`, U);
+  if (U.log.errors.length) await add("null-crash", "反馈", `列表里有字段为空时页面报错：${U.log.errors[0].split("\n")[0].slice(0, 140)}（疑似：如果接口保证这些字段不为空，可以忽略）`, U);
   else if (usesData && sameLines(U.text, F.text) && !sameLines(F.text, N.text)) await add("null-crash", "反馈", "列表里有字段为空时，整个页面按加载失败处理", U);
   const shownRaw = minus(U.text, N.text).join("\n").match(/(?<![\w./:-])(undefined|null|NaN|\[object Object\])(?![\w./:-])/);
   if (shownRaw) await add("null-shown", "呈现", `字段为空时页面直接显示 ${shownRaw[1]}`, U);

@@ -81,7 +81,26 @@ export async function run(config, { only, log = console.log, headless = true } =
 }
 
 // 去重：同一个问题在多个页面出现（共用的侧栏、导航），合并成一条，列出出现在哪些页面
+// 逐元素的规则（小目标、截断、遮挡…）在同一页同一宽度下合并成一条，列出例子
+const PER_ELEMENT = new Set(["small-target", "truncated", "occluded", "not-a-button", "hover-only"]);
+function collapse(findings) {
+  const out = []; const buckets = new Map();
+  for (const f of findings) {
+    if (!PER_ELEMENT.has(f.rule)) { out.push(f); continue; }
+    const k = `${f.rule}\u0000${f.template}\u0000${f.vp}`;
+    (buckets.get(k) ?? buckets.set(k, []).get(k)).push(f);
+  }
+  for (const list of buckets.values()) {
+    if (list.length <= 2) { out.push(...list); continue; }
+    const ex = list.slice(0, 2).map((f) => f.msg.match(/「([^」]{0,20})/)?.[1] ?? "").filter(Boolean);
+    const what = { "small-target": "个元素点击区域太小", truncated: "处文字被截断且看不到全文", occluded: "个元素被盖住点不到", "not-a-button": "个元素看起来能点但不是按钮", "hover-only": "个操作只在悬停时出现" }[list[0].rule];
+    out.push({ ...list[0], msg: `${list.length} ${what}（${list[0].vp === "mobile" ? "手机" : "桌面"}），如「${ex.join("」「")}」` });
+  }
+  return out;
+}
+
 function group(findings) {
+  findings = collapse(findings);
   const map = new Map();
   for (const f of findings) {
     const key = `${f.rule}\u0000${f.msg}`;
